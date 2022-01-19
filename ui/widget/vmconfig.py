@@ -140,4 +140,3 @@ class VMConfigWidget(QWidget):
 
         # reload
         self._load_profile()
-        

@@ -106,6 +106,7 @@ class QEMU:
         assert self._create_disk(), f"Can't the create disk\n({self.get_create_disk_command()})"
 
         self.qmp_server = QMPSocketServer()
+        print(self.get_start_command())
         self.qemu_process = subprocess.Popen(self.get_start_command(),
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,

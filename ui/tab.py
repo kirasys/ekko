@@ -1,4 +1,5 @@
 import traceback
+from turtle import right
 import idaapi
 import ida_kernwin
 
@@ -6,7 +7,8 @@ from PyQt5.QtWidgets import *
 
 from ekko.profile import *
 from ekko.ui.utils import *
-from ekko.ui.widget import VMConfigWidget
+from ekko.ui.widget.vmconfig import VMConfigWidget
+from ekko.ui.widget.qemulog import QemuLogWidget
 from ekko.qemu.qemu import QEMU
 
 class VMControlTab(ida_kernwin.PluginForm):
@@ -46,9 +48,11 @@ class VMControlTab(ida_kernwin.PluginForm):
 
     def _setup_ui(self):
         self.config_widget = VMConfigWidget(self, self.profile_name)
+        self.log_widget = QemuLogWidget(self, self.profile_name)
 
         self.tabs = QTabWidget()
         self.tabs.addTab(self.config_widget, "Config")
+        self.tabs.addTab(self.log_widget, "Log")
 
         self.btn_start = QPushButton("Start")
         self.btn_start.clicked.connect(self.btn_start_clicked)
@@ -62,6 +66,7 @@ class VMControlTab(ida_kernwin.PluginForm):
             make_hbox(self.btn_start, self.btn_stop),
             self.tabs
         )
+
         self.parent.setLayout(main_layout)
     
     def btn_start_clicked(self):

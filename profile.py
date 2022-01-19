@@ -3,6 +3,7 @@ import json
 import copy
 
 PROFILE_FILE_NAME = 'profile.json'
+LOG_FILE_NAME     = 'log.txt'
 
 class VMProfile:
     def __init__(self, profile=None):
@@ -126,9 +127,28 @@ class VMProfile:
     @qemu_path.setter
     def qemu_path(self, qemu_binary_path):
         self.profile['qemu_path'] = qemu_binary_path
+    
+    @property
+    def log_level(self):
+        if 'log_level' not in self.profile:
+            return None
+        return self.profile['log_level']
+
+    @log_level.setter
+    def log_level(self, level):
+        self.profile['log_level'] = level
+
+    @property
+    def log_file(self):
+        if 'log_file' not in self.profile:
+            return None
+        return self.profile['log_file']
+
+    @log_file.setter
+    def log_file(self, filename):
+        self.profile['log_file'] = filename
 
 profiles = {}
-
 
 # Helper functions
 
@@ -136,6 +156,10 @@ def create_vm_profile(**profile):
     global profiles
     profile = VMProfile(profile)
     profiles[profile.name] = profile
+    
+    # create an empty log file
+    profile.log_file = LOG_FILE_NAME
+    open(os.path.join(profile.work_dir, profile.log_file), 'w').close()
     
     profile.save()
 

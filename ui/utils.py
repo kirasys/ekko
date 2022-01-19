@@ -43,7 +43,7 @@ def make_vbox(*children):
 
 def make_vblank():
     label = QtWidgets.QLabel("")
-    label.setFixedHeight(3)
+    label.setFixedHeight(1)
     return label
 
 def make_hblank():
