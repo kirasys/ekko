@@ -1,7 +1,8 @@
-import traceback
-from turtle import right
 import idaapi
 import ida_kernwin
+
+import traceback
+import logging
 
 from PyQt5.QtWidgets import *
 
@@ -74,7 +75,8 @@ class VMControlTab(ida_kernwin.PluginForm):
         try:
             self.qemu.start()
         except Exception as e:
-            ida_kernwin.warning(f"Can't start QEMU : {str(e)}")
+            ida_kernwin.warning("Fail to start QEMU")
+            logging.error(str(e))
             traceback.print_exc()
         finally:
             ida_kernwin.hide_wait_box()
@@ -84,6 +86,8 @@ class VMControlTab(ida_kernwin.PluginForm):
         try:
             self.qemu.stop()
         except Exception as e:
-            ida_kernwin.warning(f"Can't stop QEMU : {str(e)}")
+            ida_kernwin.warning(f"Fail to stop QEMU")
+            logging.error(str(e))
+            traceback.print_exc()
         finally:
             ida_kernwin.hide_wait_box()

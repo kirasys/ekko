@@ -1,4 +1,5 @@
 import os
+import logging
 import platform
 import subprocess
 
@@ -11,6 +12,7 @@ class QEMU:
     def __init__(self, profile_name):
         self.profile_name = profile_name
         self.qemu_process = None
+        self.qemu_started = False
         self.qmp_server = None
         
     """
@@ -33,15 +35,6 @@ class QEMU:
         profile = get_vm_profile(self.profile_name)
         return os.path.join(profile.qemu_path, 'qemu-img')
 
-    def is_qemu_installed(self):
-        try:
-            proc = subprocess.run([self.get_qemu_system_path(), "--version"], capture_output=True)
-        except Exception as e:
-            output = ''
-        else:
-            output = proc.stdout
-        
-        return b'QEMU emulator' in output
     
     def get_create_disk_command(self):
         profile = get_vm_profile(self.profile_name)
@@ -52,27 +45,6 @@ class QEMU:
         cmd += f"{profile.disk_capacity}G"
         return cmd
 
-    def _create_disk(self, force=False):
-        profile = get_vm_profile(self.profile_name)
-
-        if not force and profile.disk_file is not None:
-            return True
-
-        try:
-            proc = subprocess.run(self.get_create_disk_command())
-        except Exception as e:
-            return False
-
-        # update the VM profile
-        if proc.returncode == 0:
-            update_vm_profile(
-                self.profile_name,
-                disk_file = self.DISK_FILE_NAME
-            )
-            return True
-
-        return False
-    
     def get_start_command(self):
         profile = get_vm_profile(self.profile_name)
 
@@ -97,36 +69,94 @@ class QEMU:
 
         return cmd
     
+    def is_qemu_installed(self):
+        try:
+            proc = subprocess.run([self.get_qemu_system_path(), "--version"], capture_output=True)
+        except Exception as e:
+            output = ''
+        else:
+            output = proc.stdout
+        
+        if b'QEMU emulator' not in output:
+            logging.error("Invalid QEMU binary path")
+            return False
+        
+        return True
+    
+    def _create_disk(self, force=False):
+        profile = get_vm_profile(self.profile_name)
+
+        if not force and profile.disk_file is not None:
+            return True
+
+        try:
+            proc = subprocess.run(self.get_create_disk_command())
+            logging.debug(f"subprocess.run({self.get_create_disk_command()})")
+        except Exception as e:
+            return False
+
+        # update the VM profile
+        if proc.returncode == 0:
+            update_vm_profile(
+                self.profile_name,
+                disk_file = self.DISK_FILE_NAME
+            )
+
+            logging.info(f"Disk file was created successfully ({self.DISK_FILE_NAME})")
+            return True
+
+        
+        logging.error(f"Can't the create disk\n({self.get_create_disk_command()})")
+        return False
+    
+    def _exit_qemu_process(self):
+        if self.qemu_process is not None:
+            self.qemu_process.kill()
+
+            outs, errs = self.qemu_process.communicate(timeout=1)
+            print(outs)
+
+            self.qemu_process = None
 
     def start(self):
-        if self.qemu_process is not None:
+        if self.qemu_started:
             return
 
-        assert self.is_qemu_installed(), "Can't find the QEMU binary"
-        assert self._create_disk(), f"Can't the create disk\n({self.get_create_disk_command()})"
+        if not self.is_qemu_installed():
+            return False
+        
+        if not self._create_disk():
+            return False
 
-        self.qmp_server = QMPSocketServer()
-        print(self.get_start_command())
         self.qemu_process = subprocess.Popen(self.get_start_command(),
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE
         )
+        logging.debug(f"subprocess.run({self.get_start_command()})")
         
         # Accept QMP client
-        assert self.qmp_server.handshake(), "Can't connect QMP monitor"
+        self.qmp_server = QMPSocketServer()
+        if not self.qmp_server.handshake():
+            self._exit_qemu_process()
+            return False
+
+        self.qemu_started = True
+        logging.info("QEMU is started")
 
     def stop(self):
-        if self.qemu_process is None:
+        if not self.qemu_started:
             return
         
         # Quit via QMP
         self.qmp_server.execute("quit")
 
         # Quit force
-        self.qemu_process.kill()
-        self.qemu_process = None
+        self._exit_qemu_process()
 
         # Close the qmp server
         self.qmp_server.close()
         self.qmp_server = None
+
+        self.qemu_started = False
+        logging.info("QEMU is exited")

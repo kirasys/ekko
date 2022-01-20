@@ -1,6 +1,9 @@
+from cmath import log
 import json
 import socket
 import select
+import logging
+import traceback
 
 def get_avaliable_port():
     sock = socket.socket()
@@ -51,16 +54,29 @@ class QMPSocketServer:
         return self.port
 
     def handshake(self):
-        # Accept the QEMU client
-        self.client, _  = self.server.accept()
-        self.client.settimeout(self.TIMEOUT_DEFAULT)
+        success = False
 
-        # Recieve the banner message
-        banner = self._recv()
-        if 'QMP' not in banner:
-            return False
+        # Accept the QEMU client
+        try:
+            self.client, _  = self.server.accept()
+            self.client.settimeout(self.TIMEOUT_DEFAULT)
+
+            logging.info("QMP client accepted")
+
+            # Recieve the banner message
+            banner = self._recv()
+            if 'QMP' not in banner:
+                return False
+            
+            logging.info("Recieved handshake message from QMP client")
+            
+            success, _ = self.execute("qmp_capabilities")
+        except Exception as e:
+            pass
         
-        success, _ = self.execute("qmp_capabilities")
+        if success == False:
+            logging.error("Fail to handshake with QMP client")
+
         return success
 
     def close(self):
@@ -70,6 +86,8 @@ class QMPSocketServer:
             self.client = None
     
     def execute(self, cmd):
+        logging.debug(f"qmp.execute({cmd})")
+
         self._send({
             "execute": cmd
         })
@@ -92,7 +110,7 @@ class QMPSocketServer:
         assert self.client, "QMP is not connected"
 
         readable, _, _ = select.select([self.client], [], [], self.TIMEOUT_RECV)
-        assert readable, "No respond (QMP)"
+        assert readable, "QMP is not readable"
         
         data = b''
         while True: # Todo: make more concrete
