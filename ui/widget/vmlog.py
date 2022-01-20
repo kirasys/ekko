@@ -4,11 +4,11 @@ from ekko.ui.utils import *
 from ekko.profile import *
 from ekko.log import LoggingViewWidget
 
-class QemuLogWidget(QWidget):
+class VMLogWidget(QWidget):
     LABEL_DEFAULT_WIDTH = 100
 
     def __init__(self, parent, profile_name):
-        super(QemuLogWidget, self).__init__()
+        super().__init__()
         self.parent = parent
         self.profile_name = profile_name
 

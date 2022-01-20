@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import *
 from ekko.profile import *
 from ekko.ui.utils import *
 from ekko.ui.widget.vmconfig import VMConfigWidget
-from ekko.ui.widget.qemulog import QemuLogWidget
+from ekko.ui.widget.vmlog import VMLogWidget
 from ekko.qemu.qemu import QEMU
 
 class VMControlTab(ida_kernwin.PluginForm):
@@ -49,7 +49,7 @@ class VMControlTab(ida_kernwin.PluginForm):
 
     def _setup_ui(self):
         self.config_widget = VMConfigWidget(self, self.profile_name)
-        self.log_widget = QemuLogWidget(self, self.profile_name)
+        self.log_widget = VMLogWidget(self, self.profile_name)
 
         self.tabs = QTabWidget()
         self.tabs.addTab(self.config_widget, "Config")
