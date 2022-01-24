@@ -10,23 +10,25 @@ from ekko.profile import *
 from ekko.ui.utils import *
 from ekko.ui.widget.vmconfig import VMConfigWidget
 from ekko.ui.widget.vmlog import VMLogWidget
+from ekko.ui.widget.vmdebug import VMDebugWidget
 from ekko.qemu.qemu import QEMU
 
 class VMControlTab(ida_kernwin.PluginForm):
     BUTTON_START_WIDTH = 60
 
     def __init__(self, profile_name):
-        super(VMControlTab, self).__init__()
+        super().__init__()
         
         self.profile_name = profile_name
-        self.qemu = QEMU(profile_name)
+        self.qemu = QEMU.create_instance(profile_name)
 
     def OnClose(self, form):
         self.qemu.stop()
 
     def OnCreate(self, form):
         self.parent = self.FormToPyQtWidget(form)
-        self._setup_ui()
+        self._create_widget()
+        self._setup_layout()
 
     def Show(self):
         # Show window
@@ -46,13 +48,15 @@ class VMControlTab(ida_kernwin.PluginForm):
             idaapi.set_dock_pos(self.profile_name, 'IDA View-A', idaapi.DP_TAB)
 
         return result
-
-    def _setup_ui(self):
-        self.config_widget = VMConfigWidget(self, self.profile_name)
-        self.log_widget = VMLogWidget(self, self.profile_name)
+    
+    def _create_widget(self):
+        self.config_widget = VMConfigWidget(self.parent, self.profile_name)
+        self.debug_widget = VMDebugWidget(self.parent, self.profile_name)
+        self.log_widget = VMLogWidget(self.parent, self.profile_name)
 
         self.tabs = QTabWidget()
         self.tabs.addTab(self.config_widget, "Config")
+        self.tabs.addTab(self.debug_widget, "Debug")
         self.tabs.addTab(self.log_widget, "Log")
 
         self.btn_start = QPushButton("Start")
@@ -63,6 +67,7 @@ class VMControlTab(ida_kernwin.PluginForm):
         self.btn_stop.clicked.connect(self.btn_stop_clicked)
         self.btn_stop.setFixedWidth(self.BUTTON_START_WIDTH)
 
+    def _setup_layout(self):
         main_layout = make_vbox(
             make_hbox(self.btn_start, self.btn_stop),
             self.tabs

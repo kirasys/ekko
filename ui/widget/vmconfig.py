@@ -9,7 +9,7 @@ class VMConfigWidget(QWidget):
     BUTTON_EDIT_WIDTH = 50
 
     def __init__(self, parent, profile_name):
-        super(VMConfigWidget, self).__init__()
+        super().__init__(parent)
         self.parent = parent
         self.profile_name = profile_name
 
@@ -134,8 +134,8 @@ class VMConfigWidget(QWidget):
             self.btn_accel_qemu.setChecked(False)
 
     def edit_button_clicked(self):
-        from ekko.ui.dialog import VMEditConfigDialog
-        dialog = VMEditConfigDialog(self.profile_name)
+        from ekko.ui.dialog.vmedit import VMEditConfigDialog
+        dialog = VMEditConfigDialog(self.parent, self.profile_name)
         dialog.exec_()
 
         # reload

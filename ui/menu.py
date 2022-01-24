@@ -1,6 +1,7 @@
 import idaapi
 import ida_kernwin
-from ekko.ui.dialog import VMConfigDialog, VMOpenDialog
+from ekko.ui.dialog.vmcreate import VMCreateDialog
+from ekko.ui.dialog.vmopen import VMOpenDialog
 
 def create_vm_handler(self):
     print("Hi")
@@ -14,7 +15,7 @@ class MenuUI:
 
     def _install_create_vm(self):
         def handler():
-            dialog = VMConfigDialog()
+            dialog = VMCreateDialog()
             dialog.exec_()
 
         act_name = self.ACTION_CREATE_VM

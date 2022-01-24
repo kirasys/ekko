@@ -18,6 +18,7 @@ class VMProfile:
         with open(os.path.join(self.profile['work_dir'], PROFILE_FILE_NAME), 'w') as f:
             json.dump(self.profile, f)
 
+    ################## VM Configuration ##################
     @property
     def work_dir(self):
         if 'work_dir' not in self.profile:
@@ -48,6 +49,7 @@ class VMProfile:
     def os_type(self, os_type_):
         self.profile['os_type'] = os_type_
     
+    ################## Hardware ##################
     @property
     def cpu_architecture(self):
         if 'cpu_architecture' not in self.profile:
@@ -108,6 +110,7 @@ class VMProfile:
     def cdrom(self, cdrom_path):
         self.profile['cdrom'] = cdrom_path
     
+    ################## Advanced Configuration ##################
     @property
     def acceleration(self):
         if 'acceleration' not in self.profile:
@@ -117,17 +120,8 @@ class VMProfile:
     @acceleration.setter
     def acceleration(self, accel):
         self.profile['acceleration'] = accel
-
-    @property
-    def qemu_path(self):
-        if 'qemu_path' not in self.profile:
-            return None
-        return self.profile['qemu_path']
-
-    @qemu_path.setter
-    def qemu_path(self, qemu_binary_path):
-        self.profile['qemu_path'] = qemu_binary_path
     
+    ################## Logging ##################
     @property
     def log_level(self):
         if 'log_level' not in self.profile:
@@ -147,6 +141,17 @@ class VMProfile:
     @log_file.setter
     def log_file(self, filename):
         self.profile['log_file'] = filename
+    
+    ################## Debug ##################
+    @property
+    def qemu_path(self):
+        if 'qemu_path' not in self.profile:
+            return None
+        return self.profile['qemu_path']
+
+    @qemu_path.setter
+    def qemu_path(self, qemu_binary_path):
+        self.profile['qemu_path'] = qemu_binary_path
 
 profiles = {}
 

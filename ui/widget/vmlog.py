@@ -6,9 +6,9 @@ from ekko.log import LoggingViewWidget
 
 class VMLogWidget(QWidget):
     LABEL_DEFAULT_WIDTH = 100
-
+    
     def __init__(self, parent, profile_name):
-        super().__init__()
+        super().__init__(parent)
         self.parent = parent
         self.profile_name = profile_name
 

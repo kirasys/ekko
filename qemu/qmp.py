@@ -39,6 +39,14 @@ class QMPSocketServer:
     TIMEOUT_RECV = 3
 
     def __init__(self):
+        self.server = None
+        self.client = None
+        self.port = None
+
+    def get_server_port(self):
+        return self.port
+    
+    def listen(self):
         sock = socket.socket()
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock.settimeout(self.TIMEOUT_DEFAULT)
@@ -48,10 +56,6 @@ class QMPSocketServer:
         sock.listen()
 
         self.server = sock
-        self.client = None
-
-    def get_server_port(self):
-        return self.port
 
     def handshake(self):
         success = False
@@ -70,8 +74,9 @@ class QMPSocketServer:
             
             logging.info("Recieved handshake message from QMP client")
             
-            success, _ = self.execute("qmp_capabilities")
+            success, _ = self._execute("qmp_capabilities")
         except Exception as e:
+            traceback.print_exc()
             pass
         
         if success == False:
@@ -85,22 +90,6 @@ class QMPSocketServer:
             self.client.close()
             self.client = None
     
-    def execute(self, cmd):
-        logging.debug(f"qmp.execute({cmd})")
-
-        self._send({
-            "execute": cmd
-        })
-        
-        res = self._recv()
-
-        if 'error' in res:
-            return False, res['error']
-        elif 'return' in res:
-            return True, res['return']
-        else:
-            return False, res
-
     def _send(self, data):
         assert self.client, "QMP is not connected"
 
@@ -120,4 +109,75 @@ class QMPSocketServer:
                 if success:
                     return res
 
+    def _execute(self, cmd, arguments=None):
+        logging.debug(f"qmp.execute({cmd})")
+
+        data = {"execute": cmd}
+        if arguments:
+            data["arguments"] = arguments
+
+        try:
+            self._send(data)
+        
+            res = self._recv()
+        except Exception as e:
+            return False, str(e)
+
+        if 'error' in res:
+            return False, res['error']
+        elif 'return' in res:
+            return True, res['return']
+        else:
+            return True, res
+
+
+    def request_exit(self):
+        self._execute("quit")
+    
+    def get_cdrom_file(self):
+        success, res = self._execute("query-block")
+        if not success:
+            logging.error(res)
+            return False, ''
+        
+        for dev_info in res:
+            if type(dev_info) is not dict:
+                continue
+
+            if dev_info['device'] != 'ide1-cd0':
+                continue
             
+            if 'inserted' not in dev_info:
+                return False, ''
+            
+            return True, dev_info['inserted']['file']
+        
+        logging.error("CD-ROM(ide1-cd0) not found")
+        return False, ''
+        
+    def request_eject(self):
+        success, res = self._execute("eject", arguments = {"device":"ide1-cd0", "force":True})
+
+        if not success:
+            logging.error(res)
+            return False, "Fail to eject CD-ROM"
+        
+        logging.info("CD-ROM is ejected")
+        return True, ''
+    
+    def request_insert_cdrom(self, iso_file):
+        success, res = self._execute(
+            "blockdev-change-medium",
+            arguments = {
+                "device" : "ide1-cd0",
+                "filename" : iso_file,
+                "format": "raw"
+            }
+        )
+
+        if not success:
+            logging.error(res)
+            return False, f"Fail to insert CD-ROM({iso_file})"
+        
+        logging.info(f"CD-ROM is inserted ({iso_file})")
+        return True, ''

@@ -1,0 +1,11 @@
+[Unit]
+Description=Debug Agent Service
+
+[Service]
+ExecStart=/usr/bin/debug_agent -p 40000
+WorkingDirectory=/tmp
+Restart=always
+RestartSec=3s
+
+[Install]
+WantedBy=multi-user.target
