@@ -1,14 +1,10 @@
-from cmath import log
 import json
 import socket
 import select
 import logging
 import traceback
 
-def get_avaliable_port():
-    sock = socket.socket()
-    sock.bind(('', 0))
-    return sock.getsockname()[1]
+from ekko.utils import *
 
 def parse_qmp_response(json_str):
     json_parsed = {}
@@ -38,7 +34,9 @@ class QMPSocketServer:
     TIMEOUT_DEFAULT = 5
     TIMEOUT_RECV = 3
 
-    def __init__(self):
+    def __init__(self, vm_name):
+        self.vm_name = vm_name
+        self.logger = logging.getLogger(vm_name)
         self.server = None
         self.client = None
         self.port = None
@@ -58,31 +56,31 @@ class QMPSocketServer:
         self.server = sock
 
     def handshake(self):
-        success = False
+        err = ''
 
         # Accept the QEMU client
         try:
             self.client, _  = self.server.accept()
             self.client.settimeout(self.TIMEOUT_DEFAULT)
 
-            logging.info("QMP client accepted")
+            self.logger.info("QMP client accepted")
 
             # Recieve the banner message
             banner = self._recv()
             if 'QMP' not in banner:
                 return False
             
-            logging.info("Recieved handshake message from QMP client")
+            self.logger.info("Recieved handshake message from QMP client")
             
-            success, _ = self._execute("qmp_capabilities")
+            _, err = self._execute("qmp_capabilities")
         except Exception as e:
             traceback.print_exc()
-            pass
+            err = str(e)
         
-        if success == False:
-            logging.error("Fail to handshake with QMP client")
+        if err:
+            self.logger.error(f"Fail to handshake with QMP client({err})")
 
-        return success
+        return len(err) == 0
 
     def close(self):
         self.server.close()
@@ -108,9 +106,13 @@ class QMPSocketServer:
                 success, res = parse_qmp_response(data)
                 if success:
                     return res
+    
+    def health_check(self):
+        _, err = self._execute("query-version")
+        return len(err) == 0 
 
     def _execute(self, cmd, arguments=None):
-        logging.debug(f"qmp.execute({cmd})")
+        self.logger.debug(f"qmp.execute({cmd})")
 
         data = {"execute": cmd}
         if arguments:
@@ -121,24 +123,23 @@ class QMPSocketServer:
         
             res = self._recv()
         except Exception as e:
-            return False, str(e)
-
+            return None, str(e)
+        print(res)
         if 'error' in res:
-            return False, res['error']
+            return None, f"Fail to execute {cmd}"
         elif 'return' in res:
-            return True, res['return']
+            return res['return'], ""
         else:
-            return True, res
-
+            return res, ""
 
     def request_exit(self):
         self._execute("quit")
     
     def get_cdrom_file(self):
-        success, res = self._execute("query-block")
-        if not success:
-            logging.error(res)
-            return False, ''
+        res, err = self._execute("query-block")
+        if err:
+            self.logger.error(err)
+            return None, err
         
         for dev_info in res:
             if type(dev_info) is not dict:
@@ -148,36 +149,119 @@ class QMPSocketServer:
                 continue
             
             if 'inserted' not in dev_info:
-                return False, ''
+                return None, 'Could not find any medium device'
             
-            return True, dev_info['inserted']['file']
+            return dev_info['inserted']['file'], ""
         
-        logging.error("CD-ROM(ide1-cd0) not found")
-        return False, ''
+        err = "CD-ROM(ide1-cd0) not found"
+        self.logger.error(err)
+        return None, err
         
     def request_eject(self):
-        success, res = self._execute("eject", arguments = {"device":"ide1-cd0", "force":True})
+        res, err = self._execute("eject", arguments = {"device":"ide1-cd0", "force":True})
 
-        if not success:
-            logging.error(res)
-            return False, "Fail to eject CD-ROM"
+        if err:
+            self.logger.error(err)
+            return None, err
         
-        logging.info("CD-ROM is ejected")
-        return True, ''
+        self.logger.info("CD-ROM is ejected")
+        return res, ""
     
     def request_insert_cdrom(self, iso_file):
-        success, res = self._execute(
-            "blockdev-change-medium",
+        res, err = self._execute(
+            'blockdev-change-medium',
             arguments = {
-                "device" : "ide1-cd0",
-                "filename" : iso_file,
-                "format": "raw"
+                'device' : 'ide1-cd0',
+                'filename' : iso_file,
+                'format': 'raw'
             }
         )
 
-        if not success:
-            logging.error(res)
-            return False, f"Fail to insert CD-ROM({iso_file})"
+        if err:
+            self.logger.error(err)
+            return None, f"Fail to insert CD-ROM({iso_file})"
         
-        logging.info(f"CD-ROM is inserted ({iso_file})")
-        return True, ''
+        self.logger.info(f"CD-ROM is inserted ({iso_file})")
+        return res, ""
+    
+    def request_get_snapshots_info(self, device):
+        res, err = self._execute("query-block")
+        if err:
+            self.logger.error(err)
+            return None, err
+        
+        for dev_info in res:
+            if type(dev_info) is not dict:
+                continue
+
+            if dev_info['device'] != device:
+                continue
+            
+            if 'inserted' not in dev_info or \
+                'image' not in dev_info['inserted']:
+                return None, "Could not find disk device"
+            
+            if 'snapshots' not in dev_info['inserted']['image']:
+                return [], ""
+            
+            return dev_info['inserted']['image']['snapshots'], ""
+
+        err = f"Disk({device}) not found"
+        self.logger.error(err)
+        return None, err
+
+    def request_save_snapshot_hm(self, tag):
+        res, err = self._execute(
+            "human-monitor-command",
+            arguments = {
+                'command-line': f"savevm {tag}"
+            }
+        )
+
+        if err:
+            self.logger.error(err)
+            return None, err
+        
+        return res, ""
+
+    def request_load_snapshot_hm(self, tag):
+        res, err = self._execute(
+            "human-monitor-command",
+            arguments = {
+                'command-line': f"loadvm {tag}"
+            }
+        )
+        if err:
+            self.logger.error(err)
+            return None, err
+        
+        return res, ""
+    
+    def request_delete_snapshot_hm(self, tag):
+        res, err = self._execute(
+            "human-monitor-command",
+            arguments = {
+                'command-line': f"delvm {tag}"
+            }
+        )
+        if err:
+            self.logger.error(err)
+            return None, err
+        
+        return res, ""
+    
+    def request_save_snapshot(self, job_id, tag, vmstate, devices):
+        res, err = self._execute(
+            "snapshot-save",
+            arguments = {
+                'job-id' : job_id,
+                'tag' : tag,
+                'vmstate' : vmstate,
+                'devices' : devices
+            }
+        )
+        if err:
+            self.logger.error(err)
+            return None, err
+        
+        return res, ""

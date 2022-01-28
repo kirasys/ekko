@@ -1,16 +1,16 @@
 from PyQt5.QtWidgets import *
 
 from ekko.ui.utils import *
-from ekko.profile import *
-from ekko.log import LoggingViewWidget
+from ekko.store.profile import *
+from ekko.ui.widget.vm_log_view import LoggingView
 
 class VMLogWidget(QWidget):
-    LABEL_DEFAULT_WIDTH = 100
+    DEFAULT_LABEL_WIDTH = 100
     
-    def __init__(self, parent, profile_name):
+    def __init__(self, parent, vm_name):
         super().__init__(parent)
         self.parent = parent
-        self.profile_name = profile_name
+        self.vm_name = vm_name
 
         self._create_widget()
         self._setup_layout()
@@ -19,7 +19,7 @@ class VMLogWidget(QWidget):
     def _create_widget(self):
         # Group box
         self.group_config = QGroupBox("Configuration")
-        self.group_qemu_log = QGroupBox("Output")
+        self.group_output = QGroupBox("Output")
 
         # Clear button
         self.btn_clear = QPushButton("Clear")
@@ -44,7 +44,7 @@ class VMLogWidget(QWidget):
         self.btn_error_level.toggled.connect(self.btn_log_level_clicked)
         
         # Log view widget
-        self.log_view_widget = LoggingViewWidget(self.profile_name)
+        self.widget_log_view = LoggingView(self.vm_name)
     
     def _setup_layout(self):
         # Configuration layout
@@ -62,10 +62,10 @@ class VMLogWidget(QWidget):
 
         # QEMU Logging layout
         vbox = make_vbox(
-            self.log_view_widget
+            self.widget_log_view
         )
         vbox.setContentsMargins(0, 0, 0, 0)
-        self.group_qemu_log.setLayout(vbox)
+        self.group_output.setLayout(vbox)
 
         # main layout
         hbox = make_hbox(
@@ -73,12 +73,12 @@ class VMLogWidget(QWidget):
                 self.group_config, 
                 self.btn_clear
             ),
-            self.group_qemu_log
+            self.group_output
         )
         self.setLayout(hbox)
     
     def _load_profile(self):
-        profile = get_vm_profile(self.profile_name)
+        profile = get_vm_profile(self.vm_name)
 
         if profile.log_file is not None:
             self.label_log_path.setText(f"$WORK_DIR\\{profile.log_file}")
@@ -93,7 +93,7 @@ class VMLogWidget(QWidget):
             self.btn_error_level.setChecked(True)
 
     def btn_clear_clicked(self):
-        self.log_view_widget.clear_log()
+        self.widget_log_view.clear_log()
 
     def btn_log_level_clicked(self):
         btn = self.sender()
@@ -101,5 +101,5 @@ class VMLogWidget(QWidget):
             self.label_log_level.setText(btn.text())
 
             # Update log level
-            self.log_view_widget.set_log_level(btn.text())
-            update_vm_profile(self.profile_name, log_level=btn.text())
+            self.widget_log_view.set_log_level(btn.text())
+            update_vm_profile(self.vm_name, log_level=btn.text())

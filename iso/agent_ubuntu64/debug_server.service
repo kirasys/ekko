@@ -1,0 +1,14 @@
+[Unit]
+Description=Debug Server Service
+
+[Service]
+ExecStart=/usr/bin/debug_server -p 40001
+WorkingDirectory=/tmp
+Restart=always
+RestartSec=3s
+StandardInput=file:/dev/ttyS4
+StandardOutput=file:/dev/ttyS5
+StandardError=inherit
+
+[Install]
+WantedBy=multi-user.target

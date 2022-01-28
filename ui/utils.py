@@ -1,3 +1,4 @@
+import idaapi
 import ida_nalt
 from PyQt5 import QtWidgets
 from PyQt5.QtCore import Qt
@@ -56,3 +57,22 @@ def make_hblank():
     label = QtWidgets.QLabel("")
     label.setFixedWidth(3)
     return label
+
+def redock_all_windows():
+    from ekko.ui.tab.vmtab import VMControlTab
+
+    # Set location of VMControlTab
+    if idaapi.find_widget(VMControlTab.WINDOW_NAME):
+        if idaapi.find_widget('Structures') is None:
+            idaapi.set_dock_pos(VMControlTab.WINDOW_NAME, None, idaapi.DP_FLOATING)
+        else:
+            idaapi.set_dock_pos(VMControlTab.WINDOW_NAME, 'Structures', idaapi.DP_TAB)
+
+    from ekko.ui.tab.debug_stdio_tab import DebuggeeStdioTab
+    
+    # Set location of DebuggeeStdioTab
+    if idaapi.find_widget(DebuggeeStdioTab.WINDOW_NAME):
+        if idaapi.find_widget('Output') is None:
+            idaapi.set_dock_pos(DebuggeeStdioTab.WINDOW_NAME, None, idaapi.DP_FLOATING)
+        else:
+            idaapi.set_dock_pos(DebuggeeStdioTab.WINDOW_NAME, 'Output', idaapi.DP_TAB)
