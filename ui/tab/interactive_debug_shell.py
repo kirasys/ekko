@@ -7,7 +7,8 @@ import idaapi
 import ida_kernwin
 
 from PyQt5.QtWidgets import *
-from PyQt5.QtGui import QFont
+from PyQt5.QtGui import QFont, QTextCursor
+from PyQt5.QtCore import pyqtSignal
 
 from ekko.ui.utils import *
 from ekko.qemu.qemu import QEMU
@@ -86,9 +87,11 @@ class InteractiveDebugShell(ida_kernwin.PluginForm):
         self.box_input.setFixedHeight(25)
         self.box_input.returnPressed.connect(self.box_input_return_pressed)
 
-        self.box_output = QPlainTextEdit("")
+        self.box_output = SafeQPlainTextEdit("")
         self.box_output.setFont(QFont('Consolas', 10))
         self.box_output.setReadOnly(True)
+
+        self.box_output.textUpdated.connect(self.box_output_update_text)
 
     def _setup_layout(self):
         debug_output_hbox = make_hbox(self.box_output)
@@ -158,7 +161,12 @@ class InteractiveDebugShell(ida_kernwin.PluginForm):
 
         # truncate input
         self.box_input.setText("")
-        return 
+        return
+
+    def box_output_update_text(self, text):
+        self.box_output.setPlainText(text)
+        self.box_output.moveCursor(QTextCursor.End)
+
 
     def start_box_output_updater(self):
         if self.box_output_updater_activated:
@@ -196,11 +204,18 @@ class InteractiveDebugShell(ida_kernwin.PluginForm):
                 time.sleep(self.BOX_UPDATER_INTERVAL)
                 continue
             
-            #self.box_output.setPlainText(
-            #    StdioStore.get_stdio_data(self.vm_name).decode('utf-8')
-            #)
-            print(StdioStore.get_stdio_data(self.vm_name).decode('utf-8'))
+            self.box_output.emit_text_update(
+                StdioStore.get_stdio_data(self.vm_name).decode('utf-8')
+            )
             
             prev_mtime = cur_mtime
             
-            
+class SafeQPlainTextEdit(QPlainTextEdit):
+
+    textUpdated = pyqtSignal(str)
+
+    def __init__(self, text=""):
+        super().__init__(text)
+    
+    def emit_text_update(self, text):
+        self.textUpdated.emit(text)
