@@ -1,7 +1,9 @@
+import os
+
 from PyQt5.QtWidgets import *
 
 from ekko.ui.utils import *
-from ekko.store.profile import *
+from ekko.store.profile import ProfileStore
 from ekko.ui.widget.vm_log_view import LoggingView
 
 class VMLogWidget(QWidget):
@@ -78,10 +80,10 @@ class VMLogWidget(QWidget):
         self.setLayout(hbox)
     
     def _load_profile(self):
-        profile = get_vm_profile(self.vm_name)
+        profile = ProfileStore.get_vm_profile(self.vm_name)
 
         if profile.log_file is not None:
-            self.label_log_path.setText(f"$WORK_DIR\\{profile.log_file}")
+            self.label_log_path.setText(f"$WORK_DIR\\{os.path.basename(profile.log_file)}")
 
         if profile.log_level is None or profile.log_level == "Debug":
             self.btn_debug_level.setChecked(True)
@@ -102,4 +104,4 @@ class VMLogWidget(QWidget):
 
             # Update log level
             self.widget_log_view.set_log_level(btn.text())
-            update_vm_profile(self.vm_name, log_level=btn.text())
+            ProfileStore.update_vm_profile(self.vm_name, log_level=btn.text())

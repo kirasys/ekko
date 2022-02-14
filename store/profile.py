@@ -2,8 +2,10 @@ import os
 import json
 import copy
 
-PROFILE_FILE_NAME = 'profile.json'
-LOG_FILE_NAME     = 'log.txt'
+PROFILE_FILE_NAME        = 'vm.profile'
+LOG_FILE_NAME            = 'log.txt'
+SNAPSHOTS_INFO_FILE_NAME = 'snapshots_info.json'
+STDIO_FILE_NAME          = 'stdio.txt'
 
 class VMProfile:
     def __init__(self, profile=None):
@@ -16,7 +18,7 @@ class VMProfile:
 
     def save(self):
         with open(os.path.join(self.profile['work_dir'], PROFILE_FILE_NAME), 'w') as f:
-            json.dump(self.profile, f)
+            json.dump(self.profile, f, indent=4)
 
     ################## VM Configuration ##################
     @property
@@ -28,6 +30,16 @@ class VMProfile:
     @work_dir.setter
     def work_dir(self, vm_path):
         self.profile['work_dir'] = vm_path
+    
+    @property
+    def qemu_path(self):
+        if 'qemu_path' not in self.profile:
+            return None
+        return self.profile['qemu_path']
+
+    @qemu_path.setter
+    def qemu_path(self, qemu_binary_path):
+        self.profile['qemu_path'] = qemu_binary_path
     
     @property
     def vm_name(self):
@@ -139,53 +151,74 @@ class VMProfile:
         return self.profile['log_file']
 
     @log_file.setter
-    def log_file(self, filename):
-        self.profile['log_file'] = filename
+    def log_file(self, filepath):
+        self.profile['log_file'] = filepath
     
     ################## Debug ##################
+
     @property
-    def qemu_path(self):
-        if 'qemu_path' not in self.profile:
+    def stdio_file(self):
+        if 'stdio_file' not in self.profile:
             return None
-        return self.profile['qemu_path']
+        return self.profile['stdio_file']
 
-    @qemu_path.setter
-    def qemu_path(self, qemu_binary_path):
-        self.profile['qemu_path'] = qemu_binary_path
+    @stdio_file.setter
+    def stdio_file(self, filepath):
+        self.profile['stdio_file'] = filepath
 
-profiles = {}
+    ################## Snapshot ##################
 
-# Helper functions
+    @property
+    def snapshots_info_file(self):
+        if 'snapshots_info_file' not in self.profile:
+            return None
+        return self.profile['snapshots_info_file']
 
-def create_vm_profile(**profile):
-    global profiles
-    profile = VMProfile(profile)
-    profiles[profile.vm_name] = profile
-    
-    # create an empty log file
-    profile.log_file = LOG_FILE_NAME
-    open(os.path.join(profile.work_dir, profile.log_file), 'w').close()
-    
-    profile.save()
+    @snapshots_info_file.setter
+    def snapshots_info_file(self, filepath):
+        self.profile['snapshots_info_file'] = filepath
 
-def read_vm_profile(work_dir_):
-    with open(os.path.join(work_dir_, PROFILE_FILE_NAME), 'r') as f:
-        profile = VMProfile(json.load(f))
-        profile.work_dir = work_dir_
+class ProfileStore:
+    profiles = {}
 
-    profile.save()
+    @staticmethod
+    def create_vm_profile(**profile):
+        profile = VMProfile(profile)
+        ProfileStore.profiles[profile.vm_name] = profile
+        
+        # create an empty log file
+        profile.log_file = os.path.join(profile.work_dir, LOG_FILE_NAME)
+        open(profile.log_file, 'w').close()
 
-    global profiles
-    profiles[profile.vm_name] = profile
-    return profile
+        # create an empty stdio file
+        profile.snapshots_info_file = os.path.join(profile.work_dir, SNAPSHOTS_INFO_FILE_NAME)
+        with open(profile.snapshots_info_file, 'w') as f:
+            f.write("{}")
+        
+        # create an empty stdio file
+        profile.stdio_file = os.path.join(profile.work_dir, STDIO_FILE_NAME)
+        open(profile.stdio_file, 'wb').close()
 
-def update_vm_profile(vm_name, **new_profile):
-    global profiles
-    profiles[vm_name].update(new_profile)
-    profiles[vm_name].save()
+        profile.save()
 
-def get_vm_profile(vm_name):
-    global profiles
-    if vm_name in profiles:
-        return profiles[vm_name]
+    @staticmethod
+    def read_vm_profile(work_dir_):
+        with open(os.path.join(work_dir_, PROFILE_FILE_NAME), 'r') as f:
+            profile = VMProfile(json.load(f))
+            profile.work_dir = work_dir_
+
+        profile.save()
+
+        ProfileStore.profiles[profile.vm_name] = profile
+        return profile
+
+    @staticmethod
+    def update_vm_profile(vm_name, **new_profile):
+        ProfileStore.profiles[vm_name].update(new_profile)
+        ProfileStore.profiles[vm_name].save()
+
+    @staticmethod
+    def get_vm_profile(vm_name):
+        if vm_name in ProfileStore.profiles:
+            return ProfileStore.profiles[vm_name]
 

@@ -8,12 +8,13 @@ from PyQt5.QtWidgets import *
 
 from ekko.utils import *
 from ekko.ui.utils import *
-from ekko.store.profile import *
+from ekko.store.profile import ProfileStore
 from ekko.qemu.qemu import QEMU
 
 class VMDebugWidget(QWidget):
-    DEFAULT_LABEL_WIDTH = 180
+    DEFAULT_LABEL_WIDTH = 210
     DEFAULT_LINE_EDIT_WIDTH = 250
+    XLARGE_BUTTON_WIDTH = 110
     LARGE_BUTTON_WIDTH = 80
     SMALL_BUTTON_WIDTH = 60
 
@@ -27,15 +28,9 @@ class VMDebugWidget(QWidget):
         self._setup_layout()
         self._reload_layout()
 
-    def _create_widget(self):
-        # Menu for Debugger Button
-        self.menu_debug_action = QMenu()
-        self.menu_debug_action.addAction('Start process', self.menu_start_process)
-        self.menu_debug_action.addAction('Attach to process', self.menu_attach_to_process)
-        self.menu_debug_action.addAction('Pause process', self.menu_pause_process)
-        self.menu_debug_action.addAction('Continue process', self.menu_continue_process)
-        self.menu_debug_action.addAction('Stop process', self.menu_stop_process)
+        self._load_debug_process_options()
 
+    def _create_widget(self):
         # Button
         self.btn_install = QPushButton("Install")
         self.btn_install.setFixedWidth(self.LARGE_BUTTON_WIDTH)
@@ -49,13 +44,25 @@ class VMDebugWidget(QWidget):
         self.btn_upload_app.setFixedWidth(self.SMALL_BUTTON_WIDTH)
         self.btn_upload_app.clicked.connect(self.btn_upload_app_clicked)
 
-        self.btn_upload_lib = QPushButton("Upload")
-        self.btn_upload_lib.setFixedWidth(self.SMALL_BUTTON_WIDTH)
-        self.btn_upload_lib.clicked.connect(self.btn_upload_lib_clicked)
+        self.btn_save_config = QPushButton("Save")
+        self.btn_save_config.setFixedWidth(self.SMALL_BUTTON_WIDTH)
+        self.btn_save_config.clicked.connect(self.btn_save_config_clicked)
 
-        self.btn_debug_action = QPushButton("")
-        self.btn_debug_action.setFixedWidth(self.LARGE_BUTTON_WIDTH)
-        self.btn_debug_action.setMenu(self.menu_debug_action)
+        self.btn_restore_config = QPushButton("Restore")
+        self.btn_restore_config.setFixedWidth(self.SMALL_BUTTON_WIDTH)
+        self.btn_restore_config.clicked.connect(self.btn_restore_config_clicked)
+
+        self.btn_quick_start = QPushButton("Quick launch")
+        self.btn_quick_start.setFixedWidth(self.XLARGE_BUTTON_WIDTH)
+        self.btn_quick_start.clicked.connect(self.btn_quick_start_clicked)
+
+        self.btn_quick_attach = QPushButton("Quick attach")
+        self.btn_quick_attach.setFixedWidth(self.XLARGE_BUTTON_WIDTH)
+        self.btn_quick_attach.clicked.connect(self.btn_quick_attach_clicked)
+
+        self.btn_interactive_shell = QPushButton("Interactive shell")
+        self.btn_interactive_shell.setFixedWidth(self.XLARGE_BUTTON_WIDTH)
+        self.btn_interactive_shell.clicked.connect(self.btn_interactive_shell_clicked)
         
         # Label
         self.debug_agent_status_label = QLabel("Debug agent must be installed for debugging.")
@@ -66,60 +73,63 @@ class VMDebugWidget(QWidget):
         
         # Group box
         self.group_config = QGroupBox("Configuration")
-        self.group_debug = QGroupBox("Debugging")
+        self.group_advanced = QGroupBox("Advanced debugging")
 
         # Text box
-        self.box_debug_dest_path = QLineEdit('/root')
-        self.box_debug_dest_path.setFixedWidth(self.DEFAULT_LINE_EDIT_WIDTH)
+        self.box_guest_app_path = QLineEdit('')
+        self.box_guest_app_path.setFixedWidth(self.DEFAULT_LINE_EDIT_WIDTH)
 
-        self.box_app_path = QLineEdit(get_loaded_binary_path())
-        self.box_app_path.setFixedWidth(self.DEFAULT_LINE_EDIT_WIDTH)
+        self.box_host_app_path = QLineEdit('')
+        self.box_host_app_path.setFixedWidth(self.DEFAULT_LINE_EDIT_WIDTH)
 
-        self.box_lib_path = QLineEdit('')
-        self.box_lib_path.setFixedWidth(self.DEFAULT_LINE_EDIT_WIDTH)
+        self.box_debug_app_parameter = QLineEdit('')
+        self.box_debug_app_parameter.setFixedWidth(self.DEFAULT_LINE_EDIT_WIDTH)
 
-        self.box_parameters = QLineEdit('')
-        self.box_parameters.setFixedWidth(self.DEFAULT_LINE_EDIT_WIDTH)
-
-        # Debug output window
-        from ekko.ui.tab.debug_stdio_tab import DebuggeeStdioTab
-        self.tab_debug_stdio = DebuggeeStdioTab(self.vm_name)
+        self.box_debug_dir = QLineEdit('')
+        self.box_debug_dir.setFixedWidth(self.DEFAULT_LINE_EDIT_WIDTH)
     
     def _setup_layout(self):
         # config layout
         vbox = make_vbox(
             make_hbox(
-                ("Debugging directory in guest", self.DEFAULT_LABEL_WIDTH), ": ",
-                self.box_debug_dest_path,
+                ("Application path in guest", self.DEFAULT_LABEL_WIDTH), ": ",
+                self.box_guest_app_path,
                 align_left=True,
             ),
             make_hbox(
-                ("Application binary", self.DEFAULT_LABEL_WIDTH), ": ",
-                self.box_app_path, self.btn_upload_app,
-                align_left=True,
-            ),
-            make_hbox(
-                ("Libirary files (optional)", self.DEFAULT_LABEL_WIDTH), ": ",
-                self.box_lib_path, self.btn_upload_lib,
+                ("Application path in host (optional)", self.DEFAULT_LABEL_WIDTH), ": ",
+                self.box_host_app_path, self.btn_upload_app,
                 align_left=True,
             ),
             make_hbox(
                 ("Parameters (optional)", self.DEFAULT_LABEL_WIDTH), ": ",
-                self.box_parameters,
+                self.box_debug_app_parameter,
                 align_left=True,
             ),
+            make_hbox(
+                ("Debugging base directory (optional)", self.DEFAULT_LABEL_WIDTH), ": ",
+                self.box_debug_dir,
+                align_left=True,
+            ),
+            " ",
+            make_hbox(self.btn_save_config, self.btn_restore_config, align_left=True),
         )
         self.group_config.setLayout(vbox)
 
-        # debug layout
+        # Advanced layout
         vbox = make_vbox(
             make_hbox(
-                "Debugger operation :", self.btn_debug_action,
-                align_left=True
+            self.btn_quick_start, ": Quickly start a new process via auto configuration"
+            ),
+            make_hbox(
+                self.btn_quick_attach, ": Quickly attach the debugger via auto configuration"
+            ),
+            make_hbox(
+                self.btn_interactive_shell, ": Open an interactive shell window to communicate with a process"
             ),
         )
-        self.group_debug.setLayout(vbox)
-        
+        self.group_advanced.setLayout(vbox)
+
         # main layout
         main_layout = make_vbox(
             ("Warning: All debugging-related operations are executed as root."),
@@ -128,13 +138,12 @@ class VMDebugWidget(QWidget):
                 self.btn_install, self.btn_reconnect,
                 align_left=True,
             ),
-            make_hbox(self.group_config, align_left=True),
-            make_hbox(self.group_debug, align_left=True),
+            make_hbox(self.group_config, self.group_advanced, align_left=True),
             self.label_error,
         )
 
         self.setLayout(main_layout)
-    
+
     def _reload_layout(self):
         if self.qemu.is_debug_agent_connectable():
             # Update the status label
@@ -145,10 +154,7 @@ class VMDebugWidget(QWidget):
 
             # Show groups
             self.group_config.show()
-            self.group_debug.show()
-            
-            # Show the debug output tab
-            self.tab_debug_stdio.Show()
+            self.group_advanced.show()
             
             return True
         else:
@@ -160,16 +166,24 @@ class VMDebugWidget(QWidget):
 
             # Hide groups
             self.group_config.hide()
-            self.group_debug.hide()
-
-            # Hide the debug output tab
-            self.tab_debug_stdio.Close()
+            self.group_advanced.hide()
 
             return False
+    
+    def _load_debug_process_options(self):
+        self.btn_restore_config_clicked()
+
+        app_path, app_parameters, debug_dir, host, _, _ = ida_dbg.get_process_options()
+
+        if host == "127.0.0.1": # is config already set
+            self.box_guest_app_path.setText(app_path)
+            self.box_debug_app_parameter.setText(app_parameters)
+            self.box_debug_dir.setText(debug_dir)
+            
 
     def btn_install_clicked(self):
-        if not self.qemu.is_qemu_started():
-            idaapi.warning("Please start VM first!")
+        if not self.qemu.is_online():
+            idaapi.warning("VM is offline")
             return
 
         from ekko.ui.dialog.install_debug_agent import DebugAgentInstallDialog
@@ -179,94 +193,90 @@ class VMDebugWidget(QWidget):
         self._reload_layout()
     
     def btn_reconnect_clicked(self):
-        if not self.qemu.is_qemu_started():
-            idaapi.warning("Please start VM first!")
+        if not self.qemu.is_online():
+            idaapi.warning("VM is offline")
             return
 
-        if self.qemu.wait_debug_agent_connection():
-            self._reload_layout()
+        self.qemu.wait_debug_agent_connection()
+        self._reload_layout()
     
+    def btn_interactive_shell_clicked(self):
+        from ekko.ui.tab.interactive_debug_shell import InteractiveDebugShell
+        debug_shell = InteractiveDebugShell(self.vm_name)
+        debug_shell.Show()
+
     def _validate_input(self):
-        guest_dir = self.box_debug_dest_path.text()
-        if guest_dir == "":
-            idaapi.warning("Please enter a destination directory")
-            return False
-        
-        app_path = self.box_app_path.text()
-        if app_path == "":
-            idaapi.warning("Please enter an apllication binary path")
-            return False
-        
-        if not os.path.isfile(app_path):
-            idaapi.warning("Invalid apllication binary path")
+        if self.box_guest_app_path.text() == "":
+            idaapi.warning("Please enter an apllication path (guest)")
             return False
         
         return True
 
     def btn_upload_app_clicked(self):
         if self._validate_input() and self._reload_layout():
-            app_path  = self.box_app_path.text()
-            guest_dir = self.box_debug_dest_path.text()
-            guest_file = unix_path_join(guest_dir, os.path.basename(app_path))
-            _, err = self.qemu.upload_host_file_to_guest(app_path, guest_file)
+            host_app_path = self.box_host_app_path.text()
+            guest_app_path = self.box_guest_app_path.text()
+            _, err = self.qemu.upload_host_file_to_guest(host_app_path, guest_app_path)
             
             if err:
                 idaapi.warning(err)
                 self._reload_layout()
             else:
-                idaapi.info(f"File has uploaded to '{guest_file}' successfully!")
+                idaapi.info(f"File has uploaded to '{guest_app_path}' successfully!")
 
             return
 
-    def btn_upload_lib_clicked(self):
-        pass
-    
-    def menu_start_process(self):
-        if self._validate_input() and self._reload_layout() and not idaapi.is_debugger_on():
-            app_path  = self.box_app_path.text()
-            guest_dir = self.box_debug_dest_path.text()
-            guest_file = unix_path_join(guest_dir, os.path.basename(app_path))
-            parameters = self.box_parameters.text()
+    def btn_save_config_clicked(self):
+        if self._validate_input():
+            guest_app_path = self.box_guest_app_path.text()
+            debug_app_parameter = self.box_debug_app_parameter.text()
+            debug_dir = self.box_debug_dir.text()
 
-            ida_dbg.load_debugger("qemu_linux", True)
-            ida_nalt.set_root_filename(guest_file)
+            if debug_dir == "":
+                debug_dir = os.path.dirname(self.box_guest_app_path.text())
+
+            # Set ida debugging option
+            ida_dbg.load_debugger("linux", True)
+            ida_nalt.set_root_filename(guest_app_path)
             ida_dbg.set_process_options(
-                guest_file,
-                parameters,
-                guest_dir,
+                guest_app_path,
+                debug_app_parameter,
+                debug_dir,
                 "127.0.0.1",
                 "",
                 self.qemu.get_debug_server_host_port()
             )
-            
+
+            return True
+
+        return False
+
+    def btn_restore_config_clicked(self):
+        self.box_host_app_path.setText(get_loaded_binary_path())
+        self.box_guest_app_path.setText(f"/root/{os.path.basename(get_loaded_binary_path())}")
+        self.box_debug_dir.setText("")
+        self.box_debug_app_parameter.setText("")
+    
+    def btn_quick_start_clicked(self):
+        if self.btn_save_config_clicked() and not idaapi.is_debugger_on():
             success = ida_dbg.start_process() == 1
+
             if not success:
                 idaapi.warning("Please check debugging directory or VM connection.")
             else:
                 redock_all_windows()
-
-    def menu_attach_to_process(self):
+        
+    def btn_quick_attach_clicked(self):
         if self._reload_layout() and not idaapi.is_debugger_on():
-            ida_dbg.load_debugger("qemu_linux", True)
+            ida_dbg.load_debugger("linux", True)
             ida_dbg.set_process_options(
-                "",
-                "",
-                "",
+                None,
+                None,
+                None,
                 "127.0.0.1",
-                "",
+                None,
                 self.qemu.get_debug_server_host_port()
             )
 
             ida_dbg.attach_process()
 
-    def menu_pause_process(self):
-        if idaapi.is_debugger_on():
-            ida_dbg.suspend_process()
-    
-    def menu_continue_process(self):
-        if idaapi.is_debugger_on():
-            ida_dbg.continue_process()
-    
-    def menu_stop_process(self):
-        if idaapi.is_debugger_on():
-            ida_dbg.exit_process()

@@ -4,11 +4,21 @@ from ekko.ui.dialog.create_vm import VMCreateDialog
 from ekko.ui.dialog.open_vm import VMOpenDialog
 
 class MenuUI:
-    ACTION_CREATE_VM    = "ekko:create_vm"
-    ACTION_OPEN_VM      = "ekko:open_vm"
+    ACTION_CREATE_VM         = "ekko:create_vm"
+    ACTION_OPEN_VM           = "ekko:open_vm"
 
     def __init__(self, core):
         self.core = core
+
+    def install(self):
+        ida_kernwin.create_menu("Ekko", "Ekko")
+
+        self._install_create_vm()
+        self._install_open_vm()
+
+    def uninstall(self):
+        self._uninstall_create_vm()
+        self._uninstall_open_vm()
 
     def _install_create_vm(self):
         def handler():
@@ -34,9 +44,6 @@ class MenuUI:
             idaapi.SETMENU_APP
         )
         assert result, f"Failed action attach {act_name}"
-    
-    def _uninstall_create_vm(self):
-        idaapi.unregister_action(self.ACTION_CREATE_VM)
 
     def _install_open_vm(self):
         def handler():
@@ -62,19 +69,12 @@ class MenuUI:
             idaapi.SETMENU_APP
         )
         assert result, f"Failed action attach {act_name}"
-    
+
+    def _uninstall_create_vm(self):
+        idaapi.unregister_action(self.ACTION_CREATE_VM)
+
     def _uninstall_open_vm(self):
         idaapi.unregister_action(self.ACTION_OPEN_VM)
-
-    def install(self):
-        ida_kernwin.create_menu("Ekko", "Ekko")
-
-        self._install_create_vm()
-        self._install_open_vm()
-
-    def uninstall(self):
-        self._uninstall_create_vm()
-        self._uninstall_open_vm()
 
 class IDACtxEntry(idaapi.action_handler_t):
     """

@@ -4,7 +4,6 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtCore import Qt
 
 from ekko.ui.utils import *
-from ekko.store.profile import *
 from ekko.store.snapshot import SnapshotStore
 
 class CreateSnapshotDialog(QDialog):

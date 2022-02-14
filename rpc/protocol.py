@@ -41,12 +41,12 @@ class ByteVector:
 
     def pack_buf(self, buf):
         if type(buf) is str:
-            buf = buf.encode('utf-8')
+            buf = buf.encode('latin-1')
         self.pack_dd(len(buf))
         self.array += buf
 
     def pack_str(self, str):
-        self.array += str.encode('utf-8') + b'\x00'
+        self.array += str.encode('latin-1') + b'\x00'
     
     def unpack_db(self):
         self.begin += 1
@@ -107,6 +107,10 @@ class ByteVector:
         else:
             x = self.unpack_db()
         return x
+    
+    def unpack_dq(self):
+        low = self.unpack_dd()
+        return low | (self.unpack_dd() << 32)
 
     def unpack_obj(self, size):
         self.begin += size
@@ -129,10 +133,6 @@ class ByteVector:
 
         self.begin += null_pos + 1
         return self.array[self.begin - null_pos - 1: self.begin]
-
-    def unpack_dq(self):
-        low = self.unpack_dd()
-        return low | (self.unpack_dd() << 32)
 
 class RPCPacketSerializer(ByteVector):
     def __init__(self):
@@ -240,3 +240,7 @@ class RPCCode:
     RPC_GET_IMAGE_UUID = 45
     RPC_GET_SEGM_START = 46
     RPC_BIN_SEARCH = 47
+
+class IOCTL:
+    PREPARE_SNAPSHOT = 100
+    FINISH_SNAPSHOT = 101

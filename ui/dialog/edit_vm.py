@@ -1,7 +1,9 @@
+import logging
+
 from PyQt5.QtWidgets import *
 
 from ekko.ui.utils import *
-from ekko.store.profile import *
+from ekko.store.profile import ProfileStore
 from ekko.ui.dialog.create_vm import VMCreateDialog
 
 class VMEditConfigDialog(VMCreateDialog):
@@ -9,6 +11,7 @@ class VMEditConfigDialog(VMCreateDialog):
         super().__init__(parent)
         self.parent = parent
         self.vm_name = vm_name
+        self.logger = logging.getLogger(vm_name)
         self.box_disk.setReadOnly(True) # Todo
 
         self._load_profile()
@@ -88,7 +91,7 @@ class VMEditConfigDialog(VMCreateDialog):
         self.setLayout(vbox)
     
     def _load_profile(self):
-        profile = get_vm_profile(self.vm_name)
+        profile = ProfileStore.get_vm_profile(self.vm_name)
         
         # Load profile
         self.box_qemu_path.setText(profile.qemu_path)
@@ -128,10 +131,9 @@ class VMEditConfigDialog(VMCreateDialog):
     def btn_ok_clicked(self):
         if self._validate_input():
             try:
-                update_vm_profile(
-                    self.vm_name,
+                ProfileStore.update_vm_profile(
+                    vm_name = self.vm_name,
                     qemu_path = self.box_qemu_path.text(),
-                    vm_name = self.box_vm_name.text(),
                     os_type = self.label_os_type.text(),
                     cpu_architecture = self.label_cpu_architecture.text(),
                     number_of_processors = self.box_processor.text(),
@@ -142,6 +144,6 @@ class VMEditConfigDialog(VMCreateDialog):
                 )
             except Exception as e:
                 self.label_error.setText("Can't edit VM profile")
-                print(str(e))
+                self.logger.error(e, exc_info=True)
             else:
                 self.close()

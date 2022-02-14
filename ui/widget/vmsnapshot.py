@@ -1,3 +1,5 @@
+import logging
+
 import idaapi
 import ida_kernwin
 
@@ -5,7 +7,6 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import *
 
 from ekko.ui.utils import *
-from ekko.store.profile import *
 from ekko.store.snapshot import SnapshotStore
 from ekko.qemu.qemu import QEMU
 
@@ -19,11 +20,12 @@ class VMSnapshotWidget(QWidget):
         super().__init__(parent)
         self.parent = parent
         self.vm_name = vm_name
+        self.logger = logging.getLogger(vm_name)
         self.qemu = QEMU.create_instance(vm_name)
 
         self._create_widget()
         self._setup_layout()
-        self._load_snapshots()
+        self._load_snapshots_info_table()
 
     def _create_widget(self):
         # Groups
@@ -37,9 +39,9 @@ class VMSnapshotWidget(QWidget):
         self.splitter_group.setStretchFactor(0, 1)
 
         # Table
-        self.tbl_snapshots = TTable(['Tag', 'Name', 'Description', 'On debugging', 'Address', ''])
+        self.tbl_snapshots = TTable(['Tag', 'Name', 'On debugging', 'Address', ''])
         self.tbl_snapshots.setRowCount(0)
-        self.tbl_snapshots.resize_columns([100, 160, 160, 100, 70, 1])
+        self.tbl_snapshots.resize_columns([100, 300, 100, 70, 1])
         self.tbl_snapshots.itemSelectionChanged.connect(self.tbl_snapshots_row_selected)
 
         # Text box
@@ -62,27 +64,26 @@ class VMSnapshotWidget(QWidget):
         self.box_address.setFixedWidth(self.DEFAULT_LINE_EDIT_WIDTH)
 
         # Buttons
-        self.btn_take_snapshot = QPushButton("Take snapshot")
-        self.btn_take_snapshot.clicked.connect(self.btn_take_snapshot_clicked)
-        self.btn_take_snapshot.setFixedWidth(self.LARGE_BUTTON_WIDTH)
+        self.btn_save_snapshot = QPushButton("Take snapshot")
+        self.btn_save_snapshot.clicked.connect(self.btn_save_snapshot_clicked)
+        self.btn_save_snapshot.setFixedWidth(self.LARGE_BUTTON_WIDTH)
 
-        self.btn_load_snapshot = QPushButton("Load snapshot")
+        self.btn_load_snapshot = QPushButton("Load")
         self.btn_load_snapshot.clicked.connect(self.btn_load_snapshot_clicked)
-        self.btn_load_snapshot.setFixedWidth(self.LARGE_BUTTON_WIDTH)
+        self.btn_load_snapshot.setFixedWidth(self.SMALL_BUTTON_WIDTH)
 
-        self.btn_save = QPushButton("Save")
-        self.btn_save.clicked.connect(self.btn_save_clicked)
-        self.btn_save.setFixedWidth(self.SMALL_BUTTON_WIDTH)
+        self.btn_save_config = QPushButton("Save")
+        self.btn_save_config.clicked.connect(self.btn_save_snapshot_config_clicked)
+        self.btn_save_config.setFixedWidth(self.SMALL_BUTTON_WIDTH)
 
-        self.btn_delete = QPushButton("Delete")
-        self.btn_delete.clicked.connect(self.btn_delete_clicked)
-        self.btn_delete.setFixedWidth(self.SMALL_BUTTON_WIDTH)
+        self.btn_delete_snapshot = QPushButton("Delete")
+        self.btn_delete_snapshot.clicked.connect(self.btn_delete_snapshot_clicked)
+        self.btn_delete_snapshot.setFixedWidth(self.SMALL_BUTTON_WIDTH)
 
     def _setup_layout(self):
         # snapshots group
         vbox = make_vbox(
             self.tbl_snapshots,
-            make_hbox(self.btn_take_snapshot, align_left=True)
         )
         self.group_snapshots.setLayout(vbox)
 
@@ -113,20 +114,22 @@ class VMSnapshotWidget(QWidget):
                 self.box_address,
                 align_left=True,
             ),
+            " ",
             make_hbox(
-                self.btn_load_snapshot, self.btn_save, self.btn_delete,
+                self.btn_load_snapshot, self.btn_save_config, self.btn_delete_snapshot,
                 align_left=True
             ),
         )
         self.group_snapshot_config.setLayout(vbox)
 
         # main layout
-        main_layout = make_hbox(
+        main_layout = make_vbox(
+            make_hbox(self.btn_save_snapshot, align_left=True),
             self.splitter_group
         )
         self.setLayout(main_layout)
 
-    def _load_snapshots(self):
+    def _load_snapshots_info_table(self):
         self.tbl_snapshots.setRowCount(0)
 
         snapshots_info = SnapshotStore.get_snapshots_info(self.vm_name)
@@ -139,9 +142,6 @@ class VMSnapshotWidget(QWidget):
             it_name = QTableWidgetItem(info['name'])
             it_name.setTextAlignment(Qt.AlignCenter)
 
-            it_description = QTableWidgetItem(info['description'])
-            it_description.setTextAlignment(Qt.AlignCenter)
-
             it_on_debugging = QTableWidgetItem(info['on_debugging'])
             it_on_debugging.setTextAlignment(Qt.AlignCenter)
 
@@ -150,11 +150,10 @@ class VMSnapshotWidget(QWidget):
 
             self.tbl_snapshots.setItem(idx, 0, it_tag)
             self.tbl_snapshots.setItem(idx, 1, it_name)
-            self.tbl_snapshots.setItem(idx, 2, it_description)
-            self.tbl_snapshots.setItem(idx, 3, it_on_debugging)
-            self.tbl_snapshots.setItem(idx, 4, it_address)
+            self.tbl_snapshots.setItem(idx, 2, it_on_debugging)
+            self.tbl_snapshots.setItem(idx, 3, it_address)
 
-    def _clean_snapshot_input(self):
+    def _clean_snapshot_info_box(self):
         self.box_tag.setText("")
         self.box_name.setText("")
         self.box_description.setText("")
@@ -166,11 +165,10 @@ class VMSnapshotWidget(QWidget):
         if len(items) > 0:
             self.box_tag.setText(items[0].text())
             self.box_name.setText(items[1].text())
-            self.box_description.setText(items[2].text())
-            self.box_on_debugging.setText(items[3].text())
-            self.box_address.setText(items[4].text())
+            self.box_on_debugging.setText(items[2].text())
+            self.box_address.setText(items[3].text())
 
-    def btn_save_clicked(self):
+    def btn_save_snapshot_config_clicked(self):
         SnapshotStore.update_snapshot_info(
             self.vm_name,
             self.box_tag.text(),
@@ -178,21 +176,29 @@ class VMSnapshotWidget(QWidget):
             description = self.box_description.text(),
         )
 
-        self._load_snapshots()
+        self._load_snapshots_info_table()
     
-    def btn_delete_clicked(self):
+    def btn_delete_snapshot_clicked(self):
+        if not self.qemu.is_online():
+            idaapi.warning("VM is offline")
+            return
+
         if self.box_tag.text() != "":
-            res, err = self.qemu.delete_snapshot(self.box_tag.text())
+            _, err = self.qemu.delete_snapshot(self.box_tag.text())
             if err:
                 ida_kernwin.warning(err)
                 return
                 
             SnapshotStore.delete_snapshot_info(self.vm_name, self.box_tag.text())
 
-            self._clean_snapshot_input()
-            self._load_snapshots()
+            self._clean_snapshot_info_box()
+            self._load_snapshots_info_table()
 
-    def btn_take_snapshot_clicked(self):
+    def btn_save_snapshot_clicked(self):
+        if not self.qemu.is_online():
+            idaapi.warning("VM is offline")
+            return
+
         from ekko.ui.dialog.create_snapshot import CreateSnapshotDialog
         dialog = CreateSnapshotDialog(self.parent, self.vm_name)
         dialog.exec_()
@@ -201,16 +207,24 @@ class VMSnapshotWidget(QWidget):
             snapshots_info = SnapshotStore.get_snapshots_info(self.vm_name)
             tag = list(snapshots_info)[-1]
 
-            _, err = self.qemu.take_snapshot(tag)
+            _, err = self.qemu.save_snapshot(tag)
             if err:
                 ida_kernwin.warning(err)
                 SnapshotStore.delete_snapshot_info(self.vm_name, tag)
 
-            self._load_snapshots()
+            self._load_snapshots_info_table()
 
     def btn_load_snapshot_clicked(self):
+        if not self.qemu.is_online():
+            _, err = self.qemu.wait_qemu_start()
+        
+            if err:
+                self.logger.error(err)
+                ida_kernwin.warning(err)
+                return
+
         if self.box_tag.text() != "":
-            res, err = self.qemu.load_snapshot(
+            _, err = self.qemu.load_snapshot(
                 self.box_tag.text(),
                 self.box_on_debugging.text() == "True"
             )

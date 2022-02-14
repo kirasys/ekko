@@ -6,7 +6,6 @@ import ida_kernwin
 from PyQt5.QtWidgets import *
 
 from ekko.ui.utils import *
-from ekko.store.profile import *
 from ekko.qemu.qemu import QEMU
 
 OS_TYPES = [
@@ -80,8 +79,8 @@ class DebugAgentInstallDialog(QDialog):
         self.setLayout(vbox)
 
     def btn_install_clicked(self):
-        if not self.qemu.is_qemu_started():
-            ida_kernwin.warning("Please start VM first!")
+        if not self.qemu.is_online():
+            idaapi.warning("VM is offline")
             return
 
         os_type = self.combo_box_os_type.currentText()
@@ -91,7 +90,7 @@ class DebugAgentInstallDialog(QDialog):
             self.label_error.setText(err)
             return
         
-        self.qemu.stop_debug_agent()
+        self.qemu.stop_debug_agent() # Stop previous debug agent process
         if self.qemu.wait_debug_agent_connection():
             self.close()
 

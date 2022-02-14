@@ -1,60 +1,49 @@
-import os
 import json
 
-from ekko.store.profile import *
+from ekko.store.profile import ProfileStore
+from ekko.utils import generate_random_hexstring
 
 class SnapshotStore:
-    SNAPSHOTS_INFO_FILE_NAME = 'snapshots_info.json'
-
-    def __init__(self):
-        pass
 
     @staticmethod
     def get_snapshots_info(vm_name):
-        profile = get_vm_profile(vm_name)
-        snapshot_info_path = os.path.join(profile.work_dir, SnapshotStore.SNAPSHOTS_INFO_FILE_NAME)
+        profile = ProfileStore.get_vm_profile(vm_name)
 
-        if not os.path.isfile(snapshot_info_path):
-            return {}
-
-        with open(snapshot_info_path, 'r') as f:
-            snapshots_info = json.load(f)
-        return snapshots_info
+        with open(profile.snapshots_info_file, 'r') as f:
+            return json.load(f)
     
     @staticmethod
     def create_snapshot_info(vm_name, **info):
-        profile = get_vm_profile(vm_name)
+        profile = ProfileStore.get_vm_profile(vm_name)
         snapshots_info = SnapshotStore.get_snapshots_info(vm_name)
 
         # Generate tag
-        tag = f"{profile.vm_name}_{len(snapshots_info)}"
-        info['tag'] = tag
+        info['tag'] = tag = generate_random_hexstring()
 
         # Save to file
         snapshots_info[tag] = info
 
-        with open(os.path.join(profile.work_dir, SnapshotStore.SNAPSHOTS_INFO_FILE_NAME), 'w') as f:
-            json.dump(snapshots_info, f)
+        with open(profile.snapshots_info_file, 'w') as f:
+            json.dump(snapshots_info, f, indent=4)
 
     @staticmethod
     def update_snapshot_info(vm_name, tag, **info):
-        profile = get_vm_profile(vm_name)
+        profile = ProfileStore.get_vm_profile(vm_name)
         snapshots_info = SnapshotStore.get_snapshots_info(vm_name)
 
         if tag in snapshots_info:
             snapshots_info[tag].update(info)
 
-            with open(os.path.join(profile.work_dir, SnapshotStore.SNAPSHOTS_INFO_FILE_NAME), 'w') as f:
-                json.dump(snapshots_info, f)
+            with open(profile.snapshots_info_file, 'w') as f:
+                json.dump(snapshots_info, f, indent=4)
 
     @staticmethod
     def delete_snapshot_info(vm_name, tag):
-        profile = get_vm_profile(vm_name)
+        profile = ProfileStore.get_vm_profile(vm_name)
         snapshots_info = SnapshotStore.get_snapshots_info(vm_name)
         
         if tag in snapshots_info:
             del snapshots_info[tag]
 
-            with open(os.path.join(profile.work_dir, SnapshotStore.SNAPSHOTS_INFO_FILE_NAME), 'w') as f:
-                json.dump(snapshots_info, f)
-
+            with open(profile.snapshots_info_file, 'w') as f:
+                json.dump(snapshots_info, f, indent=4)

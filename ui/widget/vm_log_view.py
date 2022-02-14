@@ -4,7 +4,7 @@ import logging
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import *
 from ekko.ui.utils import *
-from ekko.store.profile import *
+from ekko.store.profile import ProfileStore
 
 LOG_COLOR_TEMPLATE_MAP = {
     logging.DEBUG : '<div style="color:#303030; font-weight:bold">%s</div>',
@@ -78,16 +78,15 @@ class LoggingView(QWidget):
         self.logger.addHandler(self.text_log_handler)
 
         # Add a file handler
-        profile = get_vm_profile(self.vm_name)
+        profile = ProfileStore.get_vm_profile(self.vm_name)
 
         if profile.log_file is not None:
-            log_path = os.path.join(profile.work_dir, profile.log_file)
-            file_log_handler = logging.FileHandler(log_path)
+            file_log_handler = logging.FileHandler(profile.log_file)
             file_log_handler.setFormatter(log_format)
             self.logger.addHandler(file_log_handler)
         
             # Read a log file
-            self.text_log_handler.read_log(log_path)
+            self.text_log_handler.read_log(profile.log_file)
     
     def _setup_layout(self):
         main_layout = make_vbox(
@@ -100,8 +99,8 @@ class LoggingView(QWidget):
         self.text_log_handler.clear_log()
 
         # Clear a log file
-        profile = get_vm_profile(self.vm_name)
-        open(os.path.join(profile.work_dir, profile.log_file), 'w').close()
+        profile = ProfileStore.get_vm_profile(self.vm_name)
+        open(profile.log_file, 'w').close()
     
     def set_log_level(self, level):
         if level == "Debug":

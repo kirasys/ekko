@@ -5,7 +5,7 @@ import logging
 from ekko.rpc.protocol import *
 
 class RPCClient:
-    DEFAULT_TIMEOUT = 4
+    TIMEOUT_DEFAULT = 4
     TIMEOUT_RECV = 3
 
     def __init__(self):
@@ -47,7 +47,7 @@ class RPCClient:
             print(f"_connect: fail to connect to the port({port})")
             return None
         
-        sock.settimeout(self.DEFAULT_TIMEOUT)
+        sock.settimeout(self.TIMEOUT_DEFAULT)
         return sock
     
     def _connect_rpc_server(self):

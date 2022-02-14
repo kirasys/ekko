@@ -3,9 +3,12 @@ import ida_nalt
 from PyQt5 import QtWidgets
 from PyQt5.QtCore import Qt
 
-def make_hbox(*children, align_left=False):
+def make_hbox(*children, align_left=False, align_right=False):
     hbox = QtWidgets.QHBoxLayout()
     hbox.setAlignment(Qt.AlignTop)
+
+    if align_right:
+        hbox.addStretch()
 
     for child in children:
         if issubclass(type(child), QtWidgets.QWidget):
@@ -68,11 +71,11 @@ def redock_all_windows():
         else:
             idaapi.set_dock_pos(VMControlTab.WINDOW_NAME, 'Structures', idaapi.DP_TAB)
 
-    from ekko.ui.tab.debug_stdio_tab import DebuggeeStdioTab
+    from ekko.ui.tab.interactive_debug_shell import InteractiveDebugShell
     
-    # Set location of DebuggeeStdioTab
-    if idaapi.find_widget(DebuggeeStdioTab.WINDOW_NAME):
+    # Set location of InteractiveDebugShell
+    if idaapi.find_widget(InteractiveDebugShell.WINDOW_NAME):
         if idaapi.find_widget('Output') is None:
-            idaapi.set_dock_pos(DebuggeeStdioTab.WINDOW_NAME, None, idaapi.DP_FLOATING)
+            idaapi.set_dock_pos(InteractiveDebugShell.WINDOW_NAME, None, idaapi.DP_FLOATING)
         else:
-            idaapi.set_dock_pos(DebuggeeStdioTab.WINDOW_NAME, 'Output', idaapi.DP_TAB)
+            idaapi.set_dock_pos(InteractiveDebugShell.WINDOW_NAME, 'Output', idaapi.DP_TAB)

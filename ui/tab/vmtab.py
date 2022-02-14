@@ -6,7 +6,6 @@ import traceback
 
 from PyQt5.QtWidgets import *
 
-from ekko.store.profile import *
 from ekko.ui.utils import *
 from ekko.ui.widget.vmconfig import VMConfigWidget
 from ekko.ui.widget.vmlog import VMLogWidget
@@ -21,8 +20,10 @@ class VMControlTab(ida_kernwin.PluginForm):
     def __init__(self, vm_name):
         super().__init__()
         
-        self.vm_name = vm_name
+        # Update window name
         VMControlTab.WINDOW_NAME = vm_name
+
+        self.vm_name = vm_name
         self.logger = logging.getLogger(vm_name)
         self.qemu = QEMU.create_instance(vm_name)
 
@@ -79,23 +80,15 @@ class VMControlTab(ida_kernwin.PluginForm):
         self.parent.setLayout(main_layout)
     
     def btn_start_clicked(self):
-        ida_kernwin.show_wait_box("Starting QEMU...")
-        try:
-            self.qemu.start()
-        except Exception as e:
-            ida_kernwin.warning("Fail to start QEMU")
-            self.logger.error(str(e))
-            traceback.print_exc()
-        finally:
-            ida_kernwin.hide_wait_box()
+        _, err = self.qemu.wait_qemu_start()
+        
+        if err:
+            self.logger.error(err)
+            ida_kernwin.warning(err)
     
     def btn_stop_clicked(self):
-        ida_kernwin.show_wait_box("Stopping QEMU...")
-        try:
-            self.qemu.stop()
-        except Exception as e:
-            ida_kernwin.warning(f"Fail to stop QEMU")
-            self.logger.error(str(e))
-            traceback.print_exc()
-        finally:
-            ida_kernwin.hide_wait_box()
+        _, err = self.qemu.wait_qemu_stop()
+        
+        if err:
+            self.logger.error(err)
+            ida_kernwin.warning(err)

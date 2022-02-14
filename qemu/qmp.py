@@ -2,37 +2,11 @@ import json
 import socket
 import select
 import logging
-import traceback
 
 from ekko.utils import *
-
-def parse_qmp_response(json_str):
-    json_parsed = {}
-
-    json_start_index = 0
-    brace_count = 0
-    is_string = False
-    for i in range(len(json_str)): 
-        if json_str[i] == ord('"') and json_str[i-1] != ord('\\'):
-            is_string = not is_string
-
-        if json_str[i] == ord('{') and not is_string:
-            if brace_count == 0:
-                json_start_index = i
-
-            brace_count += 1
-                
-        if json_str[i] == ord('}') and not is_string:
-            brace_count -= 1
-
-            if brace_count == 0:
-                json_parsed.update(json.loads(json_str[json_start_index:i+1]))
     
-    return brace_count == 0, json_parsed
-
 class QMPSocketServer:
     TIMEOUT_DEFAULT = 5
-    TIMEOUT_RECV = 3
 
     def __init__(self, vm_name):
         self.vm_name = vm_name
@@ -67,16 +41,16 @@ class QMPSocketServer:
 
             # Recieve the banner message
             banner = self._recv()
-            if 'QMP' not in banner:
+            if b'QMP' not in banner:
                 return False
             
             self.logger.info("Recieved handshake message from QMP client")
             
-            _, err = self._execute("qmp_capabilities")
+            _, err = self.execute("qmp_capabilities")
         except Exception as e:
-            traceback.print_exc()
             err = str(e)
-        
+            self.logger.error(e, exc_info=True)
+
         if err:
             self.logger.error(f"Fail to handshake with QMP client({err})")
 
@@ -89,54 +63,82 @@ class QMPSocketServer:
             self.client = None
     
     def _send(self, data):
-        assert self.client, "QMP is not connected"
+        assert self.client, "QMP is offline"
 
-        self.client.send(json.dumps(data).encode())
+        self.client.send(data)
 
     def _recv(self):
-        assert self.client, "QMP is not connected"
+        assert self.client, "QMP is offline"
 
-        readable, _, _ = select.select([self.client], [], [], self.TIMEOUT_RECV)
-        assert readable, "QMP is not readable"
+        readable, _, _ = select.select([self.client], [], [], self.TIMEOUT_DEFAULT)
+        if not readable:
+            return b"{}"
         
         data = b''
         while True: # Todo: make more concrete
-            data += self.client.recv(1024)
+            data += self.client.recv(4096)
+            print("_recv:",data)
             if data.endswith(b'\n'):
-                success, res = parse_qmp_response(data)
-                if success:
-                    return res
+                _, err = parse_qmp_response(data)
+                if not err:
+                    return data
     
-    def health_check(self):
-        _, err = self._execute("query-version")
-        return len(err) == 0 
+    def _send_json(self, data):
+        self._send(json.dumps(data).encode())
 
-    def _execute(self, cmd, arguments=None):
+    def _recv_json(self, id):
+        while True:
+            res, _ = parse_qmp_response(self._recv())
+
+            # match command id
+            if 'id' in res and res['id'] == id:
+                return res
+
+    def flush_recv(self, timeout=0):
+        while True:
+            readable, _, _ = select.select([self.client], [], [], timeout)
+            if not readable:
+                break
+
+            self._recv_json()
+
+    def execute(self, cmd, arguments=None):
         self.logger.debug(f"qmp.execute({cmd})")
-
+        
         data = {"execute": cmd}
         if arguments:
             data["arguments"] = arguments
 
+        cmd_id = generate_random_hexstring()
+        data['id'] = cmd_id
+
+        print(f"execute({cmd_id}) :",cmd, data)
         try:
-            self._send(data)
+            self._send_json(data)
         
-            res = self._recv()
+            res = self._recv_json(cmd_id)
         except Exception as e:
+            self.logger.error(e, exc_info=True)
             return None, str(e)
-        print(res)
+        
+        print(f"execute({cmd_id}) :", res,'\n')
         if 'error' in res:
-            return None, f"Fail to execute {cmd}"
+            return res, f"Fail to execute {cmd}"
         elif 'return' in res:
             return res['return'], ""
         else:
             return res, ""
 
     def request_exit(self):
-        self._execute("quit")
+        self.execute("quit")
+
+    def request_job_dismiss(self, job_id):
+        return self.execute("job-dismiss",
+            arguments = {'id' : job_id}
+        )
     
-    def get_cdrom_file(self):
-        res, err = self._execute("query-block")
+    def request_get_cdrom_file(self):
+        res, err = self.execute("query-block")
         if err:
             self.logger.error(err)
             return None, err
@@ -158,7 +160,7 @@ class QMPSocketServer:
         return None, err
         
     def request_eject(self):
-        res, err = self._execute("eject", arguments = {"device":"ide1-cd0", "force":True})
+        res, err = self.execute("eject", arguments = {"device":"ide1-cd0", "force":True})
 
         if err:
             self.logger.error(err)
@@ -168,7 +170,7 @@ class QMPSocketServer:
         return res, ""
     
     def request_insert_cdrom(self, iso_file):
-        res, err = self._execute(
+        res, err = self.execute(
             'blockdev-change-medium',
             arguments = {
                 'device' : 'ide1-cd0',
@@ -185,7 +187,7 @@ class QMPSocketServer:
         return res, ""
     
     def request_get_snapshots_info(self, device):
-        res, err = self._execute("query-block")
+        res, err = self.execute("query-block")
         if err:
             self.logger.error(err)
             return None, err
@@ -211,7 +213,7 @@ class QMPSocketServer:
         return None, err
 
     def request_save_snapshot_hm(self, tag):
-        res, err = self._execute(
+        res, err = self.execute(
             "human-monitor-command",
             arguments = {
                 'command-line': f"savevm {tag}"
@@ -225,7 +227,7 @@ class QMPSocketServer:
         return res, ""
 
     def request_load_snapshot_hm(self, tag):
-        res, err = self._execute(
+        res, err = self.execute(
             "human-monitor-command",
             arguments = {
                 'command-line': f"loadvm {tag}"
@@ -238,7 +240,7 @@ class QMPSocketServer:
         return res, ""
     
     def request_delete_snapshot_hm(self, tag):
-        res, err = self._execute(
+        res, err = self.execute(
             "human-monitor-command",
             arguments = {
                 'command-line': f"delvm {tag}"
@@ -250,8 +252,10 @@ class QMPSocketServer:
         
         return res, ""
     
-    def request_save_snapshot(self, job_id, tag, vmstate, devices):
-        res, err = self._execute(
+    def request_save_snapshot(self, tag, vmstate, devices):
+        job_id = generate_random_hexstring()
+
+        _, err = self.execute(
             "snapshot-save",
             arguments = {
                 'job-id' : job_id,
@@ -260,8 +264,58 @@ class QMPSocketServer:
                 'devices' : devices
             }
         )
-        if err:
-            self.logger.error(err)
-            return None, err
-        
-        return res, ""
+
+        return job_id, err
+    
+    def request_load_snapshot(self, tag, vmstate, devices):
+        job_id = generate_random_hexstring()
+
+        _, err = self.execute(
+            "snapshot-load",
+            arguments = {
+                'job-id' : job_id,
+                'tag' : tag,
+                'vmstate' : vmstate,
+                'devices' : devices
+            }
+        )
+
+        return job_id, err
+
+    def request_delete_snapshot(self, tag, devices):
+        job_id = generate_random_hexstring()
+
+        _, err = self.execute(
+            "snapshot-delete",
+            arguments = {
+                'job-id' : job_id,
+                'tag' : tag,
+                'devices' : devices
+            }
+        )
+
+        return job_id, err
+
+def parse_qmp_response(json_str):
+    json_parsed = {}
+
+    json_start_index = 0
+    brace_count = 0
+    is_string = False
+    for i in range(len(json_str)): 
+        if json_str[i] == ord('"') and json_str[i-1] != ord('\\'):
+            is_string = not is_string
+
+        if json_str[i] == ord('{') and not is_string:
+            if brace_count == 0:
+                json_start_index = i
+
+            brace_count += 1
+                
+        if json_str[i] == ord('}') and not is_string:
+            brace_count -= 1
+
+            if brace_count == 0:
+                json_parsed.update(json.loads(json_str[json_start_index:i+1]))
+    
+    return json_parsed, "" if brace_count == 0 else "Invalid json format"

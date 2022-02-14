@@ -1,9 +1,10 @@
 import os
+import traceback
 
 from PyQt5.QtWidgets import *
 
 from ekko.ui.utils import *
-from ekko.store.profile import *
+from ekko.store.profile import ProfileStore
 
 class VMOpenDialog(QDialog):
     BOX_PROFILE_PATH_WIDTH = 300
@@ -12,7 +13,7 @@ class VMOpenDialog(QDialog):
         super().__init__()
 
         # Setting window title
-        self.setWindowTitle("Open profile.json")
+        self.setWindowTitle("Open \"vm.profile\"")
 
         ####### Main widgets #######
         # OK | Cancel button
@@ -43,13 +44,14 @@ class VMOpenDialog(QDialog):
         work_dir = os.path.dirname(self.box_profile_path.text())
 
         if work_dir == "":
-            self.label_error.setText("Please select the profile.json")
+            self.label_error.setText("Please select \"vm.profile\"")
         else:
             try:
-                profile = read_vm_profile(work_dir)
+                profile = ProfileStore.read_vm_profile(work_dir)
             except Exception as e:
                 self.label_error.setText("Invalid VM profile")
                 print(str(e))
+                traceback.print_exc()
             else:
                 # Open new tab
                 from ekko.ui.tab.vmtab import VMControlTab
@@ -60,6 +62,6 @@ class VMOpenDialog(QDialog):
         self.close()
     
     def btn_browse_profile_path_clicked(self):
-        filename = QFileDialog.getOpenFileName(self, "Open", "", "JSON (*.json)")
+        filename = QFileDialog.getOpenFileName(self, "Open", "", "Profile (*.profile)")
         if filename[0]:
             self.box_profile_path.setText(filename[0])

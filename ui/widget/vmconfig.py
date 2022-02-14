@@ -1,7 +1,7 @@
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import *
 from ekko.ui.utils import *
-from ekko.store.profile import *
+from ekko.store.profile import ProfileStore
 
 class VMConfigWidget(QWidget):
     DEFAULT_LABEL_WIDTH = 150
@@ -116,7 +116,7 @@ class VMConfigWidget(QWidget):
         self.setLayout(vbox)
     
     def _load_profile(self):
-        profile = get_vm_profile(self.vm_name)
+        profile = ProfileStore.get_vm_profile(self.vm_name)
         
         # Load profile
         self.label_qemu_path.setText(profile.qemu_path)

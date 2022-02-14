@@ -1,9 +1,10 @@
+import traceback
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIntValidator
 
 from ekko.ui.utils import *
-from ekko.store.profile import *
+from ekko.store.profile import ProfileStore
 
 class VMCreateDialog(QDialog):
     DEFAULT_LABEL_WIDTH = 200
@@ -186,7 +187,7 @@ class VMCreateDialog(QDialog):
     def btn_ok_clicked(self):
         if self._validate_input():
             try:
-                create_vm_profile(
+                ProfileStore.create_vm_profile(
                     work_dir = self.box_work_dir.text(),
                     qemu_path = self.box_qemu_path.text(),
                     vm_name = self.box_vm_name.text(),
@@ -201,6 +202,7 @@ class VMCreateDialog(QDialog):
             except Exception as e:
                 self.label_error.setText("Can't create new VM profile")
                 print(str(e))
+                traceback.print_exc()
             else:
                 from ekko.ui.tab.vmtab import VMControlTab
                 VMControlTab(self.box_vm_name.text()).Show()
