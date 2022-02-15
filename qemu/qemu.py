@@ -494,17 +494,12 @@ class QEMU:
     def get_debug_server_host_port(self):
         if self.debug_server:
             return self.debug_server.get_host_forward_port()
-    
-    def is_debug_server_connected(self):
-        return (self.debug_server and \
-                    self.debug_server.stdin_sock and \
-                    self.debug_server.stdout_sock ) is not None
         
-    def start_debuggee_stdout_worker(self):
-        self.debug_server.start_stdout_worker()
+    def start_stdout_file_updater(self):
+        self.debug_server.start_stdout_file_updater()
     
-    def stop_debuggee_stdout_worker(self):
-        self.debug_server.stop_stdout_worker()
+    def stop_stdout_file_updater(self):
+        self.debug_server.stop_stdout_file_updater()
 
     def send_stdin_to_debuggee(self, data):
         if not self.is_online():

@@ -1,3 +1,4 @@
+import os
 import socket
 import random
 import ida_loader
@@ -15,7 +16,12 @@ def unix_path_join(*args):
     return '/'.join(args)
 
 def get_loaded_binary_path():
-    return ida_loader.get_path(0)
+    bin_path, ext = os.path.splitext(ida_loader.get_path(0))
+
+    if ext in ['.i64', '.idb']:
+        return bin_path
+        
+    return bin_path + ext
 
 def generate_random_hexstring(length=16):
     jobid = random.choice('abcdef')

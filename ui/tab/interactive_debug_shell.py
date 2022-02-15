@@ -16,9 +16,10 @@ from ekko.store.profile import ProfileStore
 from ekko.store.stdio import StdioStore
 
 class InteractiveDebugShell(ida_kernwin.PluginForm):
-    WINDOW_NAME           = "Interactive debug shell"
-    DEFAULT_BUTTON_WIDTH  = 70
-    BOX_UPDATER_INTERVAL  = 1
+    WINDOW_NAME             = "Interactive debug shell"
+    DEFAULT_BUTTON_WIDTH    = 70
+    OBSERVER_CHECK_INTERVAL = 1
+    BOX_OUTPUT_MAX_CAPACITY = 1024 * 1024 * 2 # 2MB
 
     def __init__(self, vm_name):
         super().__init__()
@@ -31,8 +32,8 @@ class InteractiveDebugShell(ida_kernwin.PluginForm):
         self.qemu = QEMU.create_instance(vm_name)
         self.showed = False
 
-        self.box_output_updater_activated = False
-        self.box_output_updater_handle = None
+        self.observer_activated = False
+        self.observer_handle = None
 
     def OnClose(self, form):
         self.showed = False
@@ -44,7 +45,9 @@ class InteractiveDebugShell(ida_kernwin.PluginForm):
 
     def Close(self):
         if self.showed:
-            self.stop_box_output_updater()
+            self.showed = False
+
+            self.stop_stdio_file_update_observer()
 
             super().Close(options=(ida_kernwin.PluginForm.WCLS_SAVE |
                                     ida_kernwin.PluginForm.WCLS_DELETE_LATER))
@@ -61,7 +64,7 @@ class InteractiveDebugShell(ida_kernwin.PluginForm):
             )
 
             # Start output updater
-            self.start_box_output_updater()
+            self.start_stdio_file_update_observer()
 
             # Dock windows
             redock_all_windows()
@@ -82,11 +85,12 @@ class InteractiveDebugShell(ida_kernwin.PluginForm):
         self.btn_input_type.setFixedHeight(25)
         self.btn_input_type.setMenu(self.menu_debug_action)
 
-        # input text box
+        # input box
         self.box_input = QLineEdit("")
         self.box_input.setFixedHeight(25)
         self.box_input.returnPressed.connect(self.box_input_return_pressed)
-
+        
+        # output box
         self.box_output = SafeQPlainTextEdit("")
         self.box_output.setFont(QFont('Consolas', 10))
         self.box_output.setReadOnly(True)
@@ -110,6 +114,8 @@ class InteractiveDebugShell(ida_kernwin.PluginForm):
         self.parent.setLayout(main_layout)
 
     def menu_select_text(self):
+        print(self.box_output.textCursor().atBlockStart())
+
         self.btn_input_type.setText("Text")
     
     def menu_select_python(self):
@@ -117,7 +123,7 @@ class InteractiveDebugShell(ida_kernwin.PluginForm):
     
     def menu_select_clear(self):
         self.box_output.clear()
-        StdioStore.truncate_stdio_data(self.vm_name)
+        StdioStore.truncate_stdio_file(self.vm_name)
         
     def _interpret_input(self, type, input):
         if type == "Text":
@@ -140,10 +146,6 @@ class InteractiveDebugShell(ida_kernwin.PluginForm):
                 return None, str(e)
 
     def box_input_return_pressed(self):
-        if not self.qemu.is_debug_server_connected():
-            ida_kernwin.warning("Remote debug server is not connected.")
-            return
-
         input, err = self._interpret_input(
             self.btn_input_type.text(),
             self.box_input.text(),
@@ -163,59 +165,71 @@ class InteractiveDebugShell(ida_kernwin.PluginForm):
         self.box_input.setText("")
         return
 
-    def box_output_update_text(self, text):
-        self.box_output.setPlainText(text)
+    def box_output_update_text(self, offset):
+        if offset > self.BOX_OUTPUT_MAX_CAPACITY:
+            self.box_output.setPlainText(
+                self.box_output.toPlainText()[:offset//2]
+            )
+
+        self.box_output.insertPlainText(
+            StdioStore.get_stdio_file(
+                self.vm_name,
+                offset,
+            ).decode('utf-8', errors="backslashreplace")
+        )
+
         self.box_output.moveCursor(QTextCursor.End)
 
-
-    def start_box_output_updater(self):
-        if self.box_output_updater_activated:
+    def start_stdio_file_update_observer(self):
+        if self.observer_activated:
             return
 
         # Start stdout worker
-        self.qemu.start_debuggee_stdout_worker()
+        self.qemu.start_stdout_file_updater()
 
-        self.box_output_updater_activated = True
-        self.box_output_updater_handle = threading.Thread(target=self._box_output_updater)
-        self.box_output_updater_handle.start()
+        self.observer_activated = True
+        self.observer_handle = threading.Thread(target=self._stdio_file_update_observer)
+        self.observer_handle.start()
 
-    def stop_box_output_updater(self):
-        if not self.box_output_updater_activated:
+    def stop_stdio_file_update_observer(self):
+        if not self.observer_activated:
             return
 
         ida_kernwin.show_wait_box("Wait to close stdout channel..")
 
         try:
-            self.qemu.start_debuggee_stdout_worker()
+            self.qemu.stop_stdout_file_updater()
 
-            self.box_output_updater_activated = False
-            self.box_output_updater_handle.join()
+            self.observer_activated = False
+            self.observer_handle.join()
         finally:
             ida_kernwin.hide_wait_box()
 
-    def _box_output_updater(self):
+    def _stdio_file_update_observer(self):
         profile = ProfileStore.get_vm_profile(self.vm_name)
-        prev_mtime = 0
+        prev_filesize = 0
 
-        while self.box_output_updater_activated:
-            cur_mtime = os.stat(profile.stdio_file).st_mtime
+        while self.observer_activated:
+            cur_filesize = os.stat(profile.stdio_file).st_size
 
-            if cur_mtime == prev_mtime:
-                time.sleep(self.BOX_UPDATER_INTERVAL)
+            if cur_filesize == prev_filesize:
+                time.sleep(self.OBSERVER_CHECK_INTERVAL)
                 continue
             
-            self.box_output.emit_text_update(
-                StdioStore.get_stdio_data(self.vm_name).decode('utf-8')
-            )
+            self.box_output.emit_text_update(prev_filesize)
             
-            prev_mtime = cur_mtime
+            prev_filesize = cur_filesize
+        
+        print("close")
             
 class SafeQPlainTextEdit(QPlainTextEdit):
-
-    textUpdated = pyqtSignal(str)
+    textUpdated = pyqtSignal(int)
 
     def __init__(self, text=""):
         super().__init__(text)
     
-    def emit_text_update(self, text):
-        self.textUpdated.emit(text)
+    def emit_text_update(self, offset):
+        try:
+            self.textUpdated.emit(offset)
+        except RuntimeError:
+            return

@@ -26,8 +26,8 @@ class DebugServerClient(RPCClient):
         self.stdin_sock = None
         self.stdout_sock = None
         
-        self.stdout_worker_activated = False
-        self.stdout_worker_handle = None
+        self.stdout_file_updater_activated = False
+        self.stdout_file_updater_handle = None
 
         idaname = "ida64" if idc.__EA64__ else "ida"
         self.ida_dll = ctypes.windll[f"{idaname}.dll"]
@@ -58,26 +58,26 @@ class DebugServerClient(RPCClient):
         self.stdout_sock = self._connect(self.stdout_fwd_port)
         return self.stdout_sock is not None
 
-    def is_stdout_worker_activated(self):
-        return self.stdout_worker_activated
+    def is_stdout_file_updater_activated(self):
+        return self.stdout_file_updater_activated
 
-    def start_stdout_worker(self):
-        if self.is_stdout_worker_activated():
+    def start_stdout_file_updater(self):
+        if self.is_stdout_file_updater_activated():
             return
             
-        self.stdout_worker_activated = True
-        self.stdout_worker_handle = threading.Thread(target=self._stdout_worker)
-        self.stdout_worker_handle.start()
+        self.stdout_file_updater_activated = True
+        self.stdout_file_updater_handle = threading.Thread(target=self._stdout_file_updater)
+        self.stdout_file_updater_handle.start()
     
-    def stop_stdout_worker(self):
-        if not self.is_stdout_worker_activated():
+    def stop_stdout_file_updater(self):
+        if not self.is_stdout_file_updater_activated():
             return
 
-        self.stdout_worker_activated = False
-        self.stdout_worker_handle.join()
+        self.stdout_file_updater_activated = False
+        self.stdout_file_updater_handle.join()
 
-    def _stdout_worker(self):
-        while self.is_stdout_worker_activated():
+    def _stdout_file_updater(self):
+        while self.is_stdout_file_updater_activated():
             if not self._connect_stdout():
                 continue
             
@@ -87,7 +87,7 @@ class DebugServerClient(RPCClient):
             
             output = self.stdout_sock.recv(1024)
             if output != b'':
-                StdioStore.update_stdio_data(self.vm_name, output)
+                StdioStore.update_stdio_file(self.vm_name, output)
             
     """
     def recv_output(self, size):
@@ -115,7 +115,7 @@ class DebugServerClient(RPCClient):
         except Exception:
             return None, "Socket error"
         
-        StdioStore.update_stdio_data(self.vm_name, data)
+        StdioStore.update_stdio_file(self.vm_name, data)
 
         return None, ""
     
@@ -164,5 +164,5 @@ class DebugServerClient(RPCClient):
             self.stdout_sock.close()
             self.stdout_sock = None
         
-        self.stdout_worker_activated = False
+        self.stdout_file_updater_activated = False
         
